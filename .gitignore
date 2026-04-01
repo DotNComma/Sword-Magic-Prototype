@@ -1,0 +1,34 @@
+# --- The Big Three ---
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+
+# --- Build Outputs ---
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[MemoryCaptures]/
+
+# --- User-Specific Settings ---
+/[UserSettings]/
+/[ProjectSettings]/ProjectVersion.txt.bak
+.vsconfig
+
+# --- IDE/Solution Files ---
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.ide
+.vs/
+.vscode/
+
+# --- OS Junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Package Manager Locks ---
+/[Pp]ackages/packages-lock.json
