@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -10,32 +11,30 @@ public class PlayerMovement : MonoBehaviour
     private InputAction dashAction;
     private InputAction sprintAction;
 
-    [Header("Player Controls")]
-    private Rigidbody rb;
-    private Collider playerCollider;
-    private float playerHeight;
+    [Header("Components")]
+    private CharacterController controller;
+    private Gravity gravity;
 
     [Header("Movement Values")]
+    private float walkForce = 20f;
+    private float sprintForce = 40f;
     private float jumpForce = 10f;
-    private float rollForce = 300f;
-    private float gravityForce = 20f;
-    private float moveForce;
-
-    [Header("Ground Check")]
-    private bool isGrounded;
-    private LayerMask groundMask;
+    private float rollForce = 20f;
 
     [Header("Coyote Timing")]
     private float coyoteTime = 0.2f;
     private float coyoteTimer;
 
+    [Header("Dash Settings")]
+    private float dashForce = 25f;
+    private float dashDuration = 0.5f;
+    private bool isDashing;
+
     void Start()
     {
-        groundMask = LayerMask.GetMask("Ground");
-        rb = GetComponent<Rigidbody>();
-        playerCollider = GetComponent<Collider>();
-        playerHeight = playerCollider.bounds.size.y;
-        
+        controller = GetComponent<CharacterController>();
+        gravity = GetComponent<Gravity>();
+
         moveAction = InputSystem.actions.FindAction("Move");
         jumpAction = InputSystem.actions.FindAction("Jump");
         dashAction = InputSystem.actions.FindAction("Roll/Dash");
@@ -44,40 +43,48 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        if (isDashing) return;
+
         Vector2 moveValue = moveAction.ReadValue<Vector2>();
-        isGrounded = Physics.Raycast(transform.position, Vector3.down, playerHeight, groundMask);
 
-        if (sprintAction.IsPressed())
-        {
-            moveForce = 2000f;
-        }
-        else 
-        {
-            moveForce = 1000f;
-        }
+        float currentSpeed = sprintAction.IsPressed() ? sprintForce : walkForce;
+        Vector3 move = new Vector3(moveValue.x, 0, moveValue.y) * currentSpeed;
+        Vector3 gravityMovement = gravity.GetGravityMovement();
 
-        rb.linearVelocity = new Vector3((moveValue.x * moveForce) * Time.deltaTime, rb.linearVelocity.y, (moveValue.y * moveForce) * Time.deltaTime);
+        controller.Move((move + gravityMovement) * Time.deltaTime);
 
-        if (jumpAction.WasPressedThisFrame() && 
-            coyoteTimer > 0)
+
+        if (jumpAction.WasPressedThisFrame() && coyoteTimer > 0)
         {
-            rb.AddForce(transform.up * jumpForce, ForceMode.VelocityChange);
+            gravity.setVerticalVelocity(jumpForce);
             coyoteTimer = 0;
         }
 
-        if (dashAction.WasPressedThisFrame() && isGrounded)
-        {
-            rb.AddForce(moveValue * rollForce, ForceMode.Impulse);
-        }
-
-        if (!isGrounded)
-        {
-            rb.AddForce(-transform.up * gravityForce, ForceMode.Force);
-            coyoteTimer -= Time.deltaTime;
-        }
-        else
+        if (gravity.isGrounded)
         {
             coyoteTimer = coyoteTime;
         }
+        else
+        {
+            coyoteTimer -= Time.deltaTime;
+        }
+
+        if (dashAction.WasPressedThisFrame() && gravity.isGrounded)
+        {
+            Vector3 dashDirection = move.magnitude > 0 ? move.normalized : transform.forward;
+            StartCoroutine(PerformDash(dashDirection));
+        }
+    }
+
+    private IEnumerator PerformDash(Vector3 direction)
+    {
+        isDashing = true;
+        float startTime = Time.time;
+        while (Time.time < startTime + dashDuration)
+        {
+            controller.Move(direction * dashForce * Time.deltaTime);
+            yield return null;
+        }
+        isDashing = false;
     }
 }
