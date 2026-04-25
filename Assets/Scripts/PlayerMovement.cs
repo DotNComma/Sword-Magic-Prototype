@@ -19,7 +19,6 @@ public class PlayerMovement : MonoBehaviour
     private float walkForce = 20f;
     private float sprintForce = 40f;
     private float jumpForce = 10f;
-    private float rollForce = 20f;
 
     [Header("Coyote Timing")]
     private float coyoteTime = 0.2f;
@@ -30,7 +29,17 @@ public class PlayerMovement : MonoBehaviour
     private float dashDuration = 0.5f;
     private bool isDashing;
 
-    void Start()
+    [Header("Air Dash Settings")]
+    private float airDashForce = 30f;
+    private float airDashDuration = 0.3f;
+    private bool hasAirDashed = true;
+    private bool isAirDashing;
+
+    [Header("Camera")]
+    public Transform cameraTransform;
+    public CameraManager cameraManager;
+
+    private void Start()
     {
         controller = GetComponent<CharacterController>();
         gravity = GetComponent<Gravity>();
@@ -41,18 +50,34 @@ public class PlayerMovement : MonoBehaviour
         sprintAction = InputSystem.actions.FindAction("Sprint");
     }
 
-    void Update()
+    private void Update()
     {
         if (isDashing) return;
 
         Vector2 moveValue = moveAction.ReadValue<Vector2>();
-
         float currentSpeed = sprintAction.IsPressed() ? sprintForce : walkForce;
-        Vector3 move = new Vector3(moveValue.x, 0, moveValue.y) * currentSpeed;
+
+        Vector3 cameraForward = cameraTransform.forward;
+        Vector3 cameraRight = cameraTransform.right;
+
+        cameraForward.y = 0;
+        cameraRight.y = 0;
+        cameraForward.Normalize();
+        cameraRight.Normalize();
+
+        Vector3 move = (cameraForward * moveValue.y + cameraRight * moveValue.x) * currentSpeed;
         Vector3 gravityMovement = gravity.GetGravityMovement();
 
         controller.Move((move + gravityMovement) * Time.deltaTime);
 
+        if (cameraManager.isFollowMode)
+        {
+            transform.rotation = Quaternion.Euler(0, cameraTransform.eulerAngles.y, 0);
+        }
+        else if (move.magnitude > 0)
+        {
+            transform.forward = Vector3.Lerp(transform.forward, move, Time.deltaTime * 10f);
+        }
 
         if (jumpAction.WasPressedThisFrame() && coyoteTimer > 0)
         {
@@ -62,6 +87,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (gravity.isGrounded)
         {
+            hasAirDashed = false;
             coyoteTimer = coyoteTime;
         }
         else
@@ -69,10 +95,17 @@ public class PlayerMovement : MonoBehaviour
             coyoteTimer -= Time.deltaTime;
         }
 
-        if (dashAction.WasPressedThisFrame() && gravity.isGrounded)
+        if (dashAction.WasPressedThisFrame())
         {
-            Vector3 dashDirection = move.magnitude > 0 ? move.normalized : transform.forward;
-            StartCoroutine(PerformDash(dashDirection));
+            if(gravity.isGrounded)
+            {
+                Vector3 dashDirection = move.magnitude > 0 ? move.normalized : transform.forward;
+                StartCoroutine(PerformDash(dashDirection));
+            }
+            else if (!hasAirDashed)
+            {
+                StartCoroutine(PerformAirDash());
+            }
         }
     }
 
@@ -86,5 +119,24 @@ public class PlayerMovement : MonoBehaviour
             yield return null;
         }
         isDashing = false;
+    }
+
+    private IEnumerator PerformAirDash()
+    {
+        isAirDashing = true;
+        hasAirDashed = true;
+
+        Vector3 dashDirection = cameraTransform.forward;
+        gravity.setVerticalVelocity(0);
+
+        float startTime = Time.time;
+        while (Time.time < startTime + airDashDuration)
+        {
+            controller.Move(dashDirection * airDashForce * Time.deltaTime);
+            gravity.setVerticalVelocity(0);
+            yield return null;
+        }
+
+        isAirDashing = false;
     }
 }
